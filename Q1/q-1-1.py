@@ -4,12 +4,15 @@ import random
 from sklearn import metrics
 import math
 import matplotlib.pyplot as plt
+import pickle, os
 
 batchSize = None
 learningRate = None
-SIGMOID = 1
-TANH = 2
-RELU = 3
+SIGMOID = "Sigmoid"
+TANH = "TanH"
+RELU = "RelU"
+LOADFROMFILE = 4
+TRAINNETWORK = 5
 
 # Splits the raw data into training data set and test data set
 def splitTrainTest(df, testSize):
@@ -26,6 +29,16 @@ def calcAccuracy(actualList, predictedList):
     confusion_matrix = metrics.cluster.contingency_matrix(actualList, predictedList)
     print("Confusion Matrix:\n",confusion_matrix)
     return (np.sum(np.amax(confusion_matrix, axis=0))/np.sum(confusion_matrix))*100
+
+def oneHotEncoding(trainLabel, outputNodes):
+    trainLabel = np.asarray(trainLabel)
+    targets = trainLabel.reshape(-1)
+    one_hot_targets = np.eye(outputNodes)[targets]
+    return np.asarray(one_hot_targets)
+
+def crossEntropyError(yActual, yCap):
+    error = -np.sum(yActual*np.log(yCap+1e-9))/(yActual.shape[0])
+    return error
 
 
 class Layer:
@@ -52,6 +65,7 @@ class NeuralNetwork:
         # Initializing all the layers except the last one with random weights and bias
         for i in range(self.layersCount-1):
             weights = np.random.randn(layerNodes[i], layerNodes[i+1])*np.sqrt(1/layerNodes[i])
+            # weights = np.random.randn(layerNodes[i], layerNodes[i+1])*(0.1)
             bias = np.random.randn(1, layerNodes[i+1])
             layerObj = Layer(weights, bias)
             self.layerList.append(layerObj)
@@ -222,12 +236,54 @@ class NeuralNetwork:
 
     def predict(self, valData):
         predicted = []
+        self.kuchbhi = None
+        index = 0
         for row in valData:
             activation = self.forwardPropagation(row)
-            # print("Activation is: ", activation)
+            if index == 0:
+                self.kuchbhi = activation
+            else:    
+                np.concatenate((self.kuchbhi, activation))
             predicted.append(np.argmax(activation))
+            index += 1
         return predicted    
 
+
+def plotLossVsIterations(iterationsList, trainLossList):
+    plt.plot(iterationsList, trainLossList)
+    plt.xlabel("Iterations")
+    plt.ylabel("Loss %")
+    plt.title("Iterations Vs Loss")
+    plt.savefig("q-1-1_IterationsVsLoss.png")
+    plt.close()
+
+def plotEpochsVsAccuracy(epochList, trainAccuracyList, valAccuracyList):
+    plt.plot(epochList, trainAccuracyList)
+    plt.plot(epochList, valAccuracyList)
+    plt.xlabel("Epochs")
+    plt.ylabel("Accuracy")
+    plt.title("Epochs Vs Accuracy")
+    plt.legend(["TrainData", "Validation Data"], loc = "lower right")
+    plt.savefig("q-1-1_Epochs_Vs_Accuracy.png")
+    plt.close()
+
+def plotHiddenLayersVsAccuracy(hiddenLayerList, valAccuracyList):
+    plt.plot(hiddenLayerList, valAccuracyList)
+    plt.xlabel("Hidden Layers")
+    plt.ylabel("Accuracy")
+    plt.title("Hidden Layers Vs Validation Data Accuracy")
+    plt.savefig("q-1-1_HiddenLayers_Vs_ValAccuracy.png")
+    plt.close()
+
+def plotHiddenLayersVsPredictionError(hiddenLayerList, trainLossList, valLossList):
+    plt.plot(hiddenLayerList, trainLossList)
+    plt.plot(hiddenLayerList, valLossList)
+    plt.xlabel("Hidden Layers")
+    plt.ylabel("PredictionError")
+    plt.title("Hidden Layers Vs PredictionError")
+    plt.legend(["TrainData", "Validation Data"], loc = "lower right")
+    plt.savefig("q-1-1_HiddenLayers_Vs_PredictionError.png")
+    plt.close()
 
 if __name__ == "__main__":
     df = pd.read_csv("apparel-trainval.csv")
@@ -244,50 +300,127 @@ if __name__ == "__main__":
     valData = valData.values
 
     # Normalizing the data
-    train_sd = np.std(trainData)
-    train_mean = np.mean(trainData)
-    trainData = (trainData - train_mean)/train_sd
-    valData = (valData - train_mean)/train_sd
+    trainSD = np.std(trainData)
+    trainMean = np.mean(trainData)
+    trainData = (trainData - trainMean)/trainSD
+    valData = (valData - trainMean)/trainSD
 
-    inputNodes = trainData.shape[1]
-    outputNodes = 10
-    # This list represents the number of layers and number of nodes in each layer
-    layerNodes = [inputNodes, 20, 20, outputNodes]
-    batchSize = 100
-    learningRate = 0.1
-    iterations = 10
+    # mode = TRAINNETWORK
+    mode = LOADFROMFILE
+    parametersFile = None
 
-    nn = NeuralNetwork()
-    nn.funcType = RELU
-    nn.buildNetwork(layerNodes)
+    if mode == LOADFROMFILE:
+        try:
+            parametersFile = open("parameters", "rb")
+            nn = pickle.load(parametersFile)
+        except:
+            print("Error while loading weights and bias from the file..")
+        finally:
+            parametersFile.close()
+    
+    else:
+        inputNodes = trainData.shape[1]
+        outputNodes = 10
+        # This list represents the number of layers and number of nodes in each layer
+        layerNodes = [inputNodes, outputNodes]
+        batchSize = 100
+        learningRate = 0.1
+        valAccuracyList = []
+        trainAccuracyList = []
+        trainLossList = []
+        valLossList = []
+        # epochList = [5, 10, 15, 20, 25, 30]
+        epochList = [20]
+        nn = None
+        iterations = 10
+        hiddenLayerList = []
+        for iterations in epochList:
+            layerNodes = [inputNodes, 50, 50, outputNodes]
+        # for hNum in range(1,6):
 
-    lossList = []
-    iterationsList = []
-    for k in range(iterations):
-        print("Iteration: ",k+1)
-        iterationsList.append(k+1)
-        start = 0
-        end = batchSize
-        loss = 0
-        numBatches = math.ceil(trainData.shape[0]/batchSize)
-        for i in range(numBatches):
-            data = trainData[start:end, :]
-            label = trainLabel[start:end]
-            loss += nn.trainNetwork(data, label, outputNodes)
-            start += batchSize
-            end += batchSize
-        loss = (loss*100)/trainData.shape[0]   
-        lossList.append(loss)
-        print("Loss%: ", loss)
+            # layerNodes = layerNodes[:-1]
+            # layerNodes.append(50)
+            # layerNodes.append(outputNodes)
+            # hiddenLayerList.append(hNum)
+            # print("Trainig neural network with Hidden layers:", hNum)
+            print("For epoch:", iterations)
+            nn = NeuralNetwork()
+            nn.funcType = SIGMOID    
+            nn.buildNetwork(layerNodes)
+            # print("Trainig neural network with function type: ", nn.funcType)
+            iterationsList = []
 
-    predicted = nn.predict(valData)
-    # print("Predicted: ", predicted)
-    print("Accuracy is: ", calcAccuracy(valLabel.flatten().tolist(), predicted))
+            for k in range(iterations):
+                print("Iteration: ",k+1)
+                iterationsList.append(k+1)
+                start = 0
+                end = batchSize
+                loss = 0
+                numBatches = math.ceil(trainData.shape[0]/batchSize)
+                for i in range(numBatches):
+                    data = trainData[start:end, :]
+                    label = trainLabel[start:end]
+                    loss += nn.trainNetwork(data, label, outputNodes)
+                    start += batchSize
+                    end += batchSize
+                
+                # loss = loss/trainData.shape[0]   
+                # trainLossList.append(loss)
+                # print("Loss: ", loss)
 
-    plt.plot(iterationsList, lossList)
-    plt.xlabel("Iterations")
-    plt.ylabel("Loss %")
-    plt.title("Iterations Vs Loss")
-    # plt.show()
-    plt.savefig("q-1-1_IterationsVsLoss.png")
-    plt.close()
+            # valLabel = valLabel.flatten().tolist()
+            predicted = []
+            # Prediction on validation data
+            predicted = nn.predict(valData)
+            valAccuracy = calcAccuracy(valLabel.flatten().tolist(), predicted)
+            print("Accuracy on validation data is: ", valAccuracy)
+            valAccuracyList.append(valAccuracy)
+            valActual = oneHotEncoding(valLabel, outputNodes)
+            # valCap = oneHotEncoding(predicted, outputNodes)
+
+            loss = crossEntropyError(valActual, nn.kuchbhi)
+            valLossList.append(loss)
+
+            predicted = nn.predict(trainData)
+            trainAccuracy = calcAccuracy(trainLabel.flatten().tolist(), predicted)
+            print("Accuracy on train data is: ", trainAccuracy)
+            trainAccuracyList.append(trainAccuracy)
+            trainActual = oneHotEncoding(trainLabel, outputNodes)
+            # trainCap = oneHotEncoding(predicted, outputNodes)
+            loss = crossEntropyError(trainActual, nn.kuchbhi)
+            trainLossList.append(loss)
+
+        if mode == TRAINNETWORK:
+            print("Network Successfully trained..")
+            # plotLossVsIterations(trainLossList, iterationsList)
+            # plotEpochsVsAccuracy(epochList, trainAccuracyList, valAccuracyList)
+            # print("ValLossList: ",valLossList)
+            # print("trainLossList: ",trainLossList)
+            # plotHiddenLayersVsAccuracy(hiddenLayerList, valAccuracyList)
+            # plotHiddenLayersVsPredictionError(hiddenLayerList, trainLossList, valLossList)
+
+            
+
+    if mode == LOADFROMFILE:
+        predicted = []
+        # Prediction on validation data
+        predicted = nn.predict(valData)
+        valAccuracy = calcAccuracy(valLabel.flatten().tolist(), predicted)
+        print("Accuracy on validation data is: ", valAccuracy)
+
+    # Prediction on test data
+    testData = pd.read_csv("apparel-test.csv").values
+    # Normalizing the test data
+    testData = (testData - trainMean)/trainSD
+    predicted = nn.predict(testData)
+    np.savetxt('2018202003_prediction.csv', predicted, delimiter=',', fmt="%d")
+    print("Test data prediction successfully saved to '2018202003_prediction.csv'")
+
+    # Dumping the current neural network class object into the file
+    try:
+        parametersFile = open("parameters", "wb")
+        pickle.dump(nn, parametersFile)
+    except:
+        print("Error while dumping neural network parametrs into pickle file")
+    finally:        
+        parametersFile.close()
