@@ -98,14 +98,6 @@ class NeuralNetwork:
         return z
 
     def softmax(self, a):
-        # mat = z.tolist()
-        # res = []
-        # for row in mat:
-        #     row = np.asarray(row)
-        #     expSum = np.sum(np.exp(row))
-        #     row = row/expSum
-        #     res.append(row)
-        # return np.asarray(res)
         z = np.exp(a)
         zSum = np.sum(z, axis=1)
         for i in range(len(z)):
@@ -305,8 +297,8 @@ if __name__ == "__main__":
     trainData = (trainData - trainMean)/trainSD
     valData = (valData - trainMean)/trainSD
 
-    # mode = TRAINNETWORK
-    mode = LOADFROMFILE
+    mode = TRAINNETWORK
+    # mode = LOADFROMFILE
     parametersFile = None
 
     if mode == LOADFROMFILE:
@@ -334,16 +326,16 @@ if __name__ == "__main__":
         nn = None
         iterations = 10
         hiddenLayerList = []
-        for iterations in epochList:
-            layerNodes = [inputNodes, 50, 50, outputNodes]
-        # for hNum in range(1,6):
+        # for iterations in epochList:
+        #     layerNodes = [inputNodes, 50, 50, outputNodes]
+        for hNum in range(1,3):
 
-            # layerNodes = layerNodes[:-1]
-            # layerNodes.append(50)
-            # layerNodes.append(outputNodes)
-            # hiddenLayerList.append(hNum)
-            # print("Trainig neural network with Hidden layers:", hNum)
-            print("For epoch:", iterations)
+            layerNodes = layerNodes[:-1]
+            layerNodes.append(50)
+            layerNodes.append(outputNodes)
+            hiddenLayerList.append(hNum)
+            print("Trainig neural network with Hidden layers:", hNum)
+            # print("For epoch:", iterations)
             nn = NeuralNetwork()
             nn.funcType = SIGMOID    
             nn.buildNetwork(layerNodes)
@@ -397,7 +389,7 @@ if __name__ == "__main__":
             # print("ValLossList: ",valLossList)
             # print("trainLossList: ",trainLossList)
             # plotHiddenLayersVsAccuracy(hiddenLayerList, valAccuracyList)
-            # plotHiddenLayersVsPredictionError(hiddenLayerList, trainLossList, valLossList)
+            plotHiddenLayersVsPredictionError(hiddenLayerList, trainLossList, valLossList)
 
             
 
